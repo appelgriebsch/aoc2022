@@ -95,7 +95,7 @@ fn main() {
     }
 
     let mut input = String::new();
-    if let Ok(mut input_file) = File::open(&args[1]) {
+    if let Ok(mut input_file) = File::open(&input_filename) {
         input_file
             .read_to_string(&mut input)
             .expect("Error reading input file {input_filename}.");
