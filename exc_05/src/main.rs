@@ -1,5 +1,23 @@
 use std::{env, fs::File, io::Read, path::Path};
 
+struct Slot {
+    items: Vec<char>,
+}
+
+impl Slot {
+    pub fn new(items: &[char]) -> Self {
+        Slot {
+            items: items.to_vec(),
+        }
+    }
+    pub fn pop(&mut self) -> Option<char> {
+        self.items.pop()
+    }
+    pub fn push(&mut self, item: char) {
+        self.items.push(item)
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -22,6 +40,4 @@ fn main() {
 }
 
 #[cfg(test)]
-mod test {
-
-}
+mod test {}
