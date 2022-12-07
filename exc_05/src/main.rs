@@ -1,10 +1,5 @@
-use std::{
-    env,
-    fmt::{Display, Write},
-    fs::File,
-    io::Read,
-    path::Path,
-};
+use regex::Regex;
+use std::{env, fmt::Display, fs::File, io::Read, path::Path};
 
 #[derive(Debug, Clone)]
 struct Slot {
@@ -77,9 +72,9 @@ impl Stock {
 impl Display for Stock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for slot in self.slots().iter() {
-            f.write_str(&format!("| {}", slot))?;
+            f.write_str(&format!("| {}|\n", slot))?;
         }
-        f.write_char('|')
+        f.write_str("")
     }
 }
 
@@ -96,11 +91,45 @@ fn main() {
         panic!("Input file {input_filename} does not exists or is not accessible.");
     }
 
+    let slot_1 = Slot::new(vec!['Q', 'M', 'G', 'C', 'L']);
+    let slot_2 = Slot::new(vec!['R', 'D', 'L', 'C', 'T', 'F', 'H', 'G']);
+    let slot_3 = Slot::new(vec!['V', 'J', 'F', 'N', 'M', 'T', 'W', 'R']);
+    let slot_4 = Slot::new(vec!['J', 'F', 'D', 'V', 'Q', 'P']);
+    let slot_5 = Slot::new(vec!['N', 'F', 'M', 'S', 'L', 'B', 'T']);
+    let slot_6 = Slot::new(vec!['R', 'N', 'V', 'H', 'C', 'D', 'P']);
+    let slot_7 = Slot::new(vec!['H', 'C', 'T']);
+    let slot_8 = Slot::new(vec!['G', 'S', 'J', 'V', 'Z', 'N', 'H', 'P']);
+    let slot_9 = Slot::new(vec!['Z', 'F', 'H', 'G']);
+    let mut stock = Stock::new(vec![
+        slot_1, slot_2, slot_3, slot_4, slot_5, slot_6, slot_7, slot_8, slot_9,
+    ]);
+
     let mut input = String::new();
     if let Ok(mut input_file) = File::open(&input_filename) {
         input_file
             .read_to_string(&mut input)
             .expect("Error reading input file {input_filename}.");
+
+        let re = Regex::new(
+            r"^move (?P<no_of_items>\d{1,2}) from (?P<from_slot>\d{1}) to (?P<to_slot>\d{1})$",
+        )
+        .expect("regex is wrong!");
+        let mut counter = 0;
+        input
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty() && re.is_match(line))
+            .for_each(|instruction| {
+                if let Some(captures) = re.captures(instruction) {
+                    let no_of_items: usize = captures["no_of_items"].parse().unwrap();
+                    let from_slot: usize = captures["from_slot"].parse().unwrap();
+                    let to_slot: usize = captures["to_slot"].parse().unwrap();
+                    stock.shift(from_slot, to_slot, no_of_items);
+                    counter += 1;
+                }
+            });
+        println!("After {counter} shifts stock looks like this: ");
+        println!("{}", stock);
     }
 }
 
@@ -110,27 +139,38 @@ mod test {
 
     #[test]
     fn processes_sample() {
+        /*
+                [D]
+            [N] [C]
+            [Z] [M] [P]
+             1   2   3
+
+            move 1 from 2 to 1
+            move 3 from 1 to 3
+            move 2 from 2 to 1
+            move 1 from 1 to 2
+        */
         let slot_1 = Slot::new(vec!['Z', 'N']);
         let slot_2 = Slot::new(vec!['M', 'C', 'D']);
         let slot_3 = Slot::new(vec!['P']);
 
         let mut stock = Stock::new(vec![slot_1, slot_2, slot_3]);
-        assert_eq!(stock.to_string(), "| Z N | M C D | P |");
+        assert_eq!(stock.to_string(), "| Z N |\n| M C D |\n| P |\n");
 
         // step 1: move 1 from 2 to 1
         stock.shift(2, 1, 1);
-        assert_eq!(stock.to_string(), "| Z N D | M C | P |");
+        assert_eq!(stock.to_string(), "| Z N D |\n| M C |\n| P |\n");
 
         // step 2: move 3 from 1 to 3
         stock.shift(1, 3, 3);
-        assert_eq!(stock.to_string(), "| | M C | P D N Z |");
+        assert_eq!(stock.to_string(), "| |\n| M C |\n| P D N Z |\n");
 
         // step 3: move 2 from 2 to 1
         stock.shift(2, 1, 2);
-        assert_eq!(stock.to_string(), "| C M | | P D N Z |");
+        assert_eq!(stock.to_string(), "| C M |\n| |\n| P D N Z |\n");
 
         // step 4: move 1 from 1 to 2
         stock.shift(1, 2, 1);
-        assert_eq!(stock.to_string(), "| C | M | P D N Z |");
+        assert_eq!(stock.to_string(), "| C |\n| M |\n| P D N Z |\n");
     }
 }
