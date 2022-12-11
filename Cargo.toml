@@ -5,4 +5,5 @@ members = [
   "exc_03",
   "exc_04",
   "exc_05",
+  "exc_06",
 ]
