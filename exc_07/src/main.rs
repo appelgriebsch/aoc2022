@@ -68,60 +68,19 @@ impl DirectoryMetadata {
             .sum()
     }
 
-    pub fn parse(&mut self, items: &[&str]) -> usize {
-        lazy_static! {
-            static ref RE_CMD: Regex =
-                Regex::new(r"^\$\s(?P<cmd>\S+)(\s(?P<arg>\S+))?$").expect("regex is wrong!");
-            static ref RE_FILE: Regex =
-                Regex::new(r"^(?P<size>\d+)\s(?P<name>\S+)$").expect("regex is wrong!");
-        }
-
-        let mut no_of_items_read = 0;
-        let mut no_of_items_to_advance = 0;
-        for (i, item) in items.iter().enumerate() {
-            if no_of_items_to_advance > 0 {
-                no_of_items_to_advance -= 1;
-                continue;
-            }
-            if RE_FILE.is_match(item) {
-                if let Some(captures) = RE_FILE.captures(item) {
-                    let size: usize = captures["size"].parse().unwrap();
-                    let name: &str = captures["name"].as_ref();
-                    println!(
-                        "Found file {name} with size {size} in directory {}",
-                        self.name()
-                    );
-                    self.items.push(Node::File(FileMetadata::new(name, size)));
+    pub fn parse(&mut self, parser: &mut Parser) {
+        loop {
+            match parser.next() {
+                Some(ParseResult::Unknown) => continue,
+                Some(ParseResult::File(f)) => self.items.push(Node::File(f)),
+                Some(ParseResult::EnterDirectory(name)) => {
+                    let mut subdir = DirectoryMetadata::new(name);
+                    subdir.parse(parser);
+                    self.items.push(Node::Directory(subdir));
                 }
+                _ => break,
             }
-            if RE_CMD.is_match(item) {
-                if let Some(captures) = RE_CMD.captures(item) {
-                    if let Some(arg) = captures.name("arg") {
-                        match (captures["cmd"].as_ref(), arg.as_str()) {
-                            ("cd", "..") => {
-                                no_of_items_read = i + 1;
-                                break;
-                            }
-                            ("cd", subdir) => {
-                                let mut subdir_node = DirectoryMetadata::new(subdir);
-                                no_of_items_to_advance = subdir_node.parse(&items[(i + 1)..]);
-                                self.items.push(Node::Directory(subdir_node));
-                            }
-                            _ => continue,
-                        }
-                    }
-                }
-            }
-
-            no_of_items_read = i + 1;
         }
-
-        println!(
-            "Processed directory {} with size {}",
-            self.name(),
-            self.size()
-        );
-        no_of_items_read
     }
 }
 
@@ -129,6 +88,70 @@ impl DirectoryMetadata {
 pub enum Node {
     File(FileMetadata),
     Directory(DirectoryMetadata),
+}
+
+pub enum ParseResult<'a> {
+    Unknown,
+    EnterDirectory(&'a str),
+    LeaveDirectory,
+    File(FileMetadata),
+}
+
+pub struct Parser<'a> {
+    items: Vec<&'a str>,
+    current_index: usize,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(items: Vec<&'a str>) -> Self {
+        Parser {
+            items,
+            current_index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for Parser<'a> {
+    type Item = ParseResult<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        lazy_static! {
+            static ref RE_CMD: Regex =
+                Regex::new(r"^\$\s(?P<cmd>\S+)(\s(?P<arg>\S+))?$").expect("regex is wrong!");
+            static ref RE_FILE: Regex =
+                Regex::new(r"^(?P<size>\d+)\s(?P<name>\S+)$").expect("regex is wrong!");
+        }
+        if let Some(item) = self.items.get(self.current_index) {
+            self.current_index += 1;
+            if RE_FILE.is_match(item) {
+                if let Some(captures) = RE_FILE.captures(item) {
+                    let size: usize = captures["size"].parse().unwrap();
+                    let name: &str = captures["name"].as_ref();
+                    Some(ParseResult::File(FileMetadata::new(name, size)))
+                } else {
+                    Some(ParseResult::Unknown)
+                }
+            } else if RE_CMD.is_match(item) {
+                if let Some(captures) = RE_CMD.captures(item) {
+                    if let Some(arg) = captures.name("arg") {
+                        match (captures["cmd"].as_ref(), arg.as_str()) {
+                            ("cd", "..") => Some(ParseResult::LeaveDirectory),
+                            ("cd", subdir) => Some(ParseResult::EnterDirectory(subdir)),
+                            _ => Some(ParseResult::Unknown),
+                        }
+                    } else {
+                        Some(ParseResult::Unknown)
+                    }
+                } else {
+                    Some(ParseResult::Unknown)
+                }
+            } else {
+                Some(ParseResult::Unknown)
+            }
+        } else {
+            None
+        }
+    }
 }
 
 fn main() {
@@ -154,7 +177,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    use crate::DirectoryMetadata;
+    use crate::{DirectoryMetadata, Parser};
 
     #[test]
     fn processes_sample_part1() {
@@ -189,7 +212,9 @@ mod test {
             .map(|line| line.trim())
             .skip(1)
             .collect();
-        root_dir.parse(&lines);
+        let mut parser = Parser::new(lines);
+        root_dir.parse(&mut parser);
+        dbg!(&root_dir);
         assert_eq!(root_dir.name(), "/");
         assert_eq!(root_dir.size(), 48381165);
         assert_eq!(root_dir.find_subdirectory("a").unwrap().size(), 94853);
