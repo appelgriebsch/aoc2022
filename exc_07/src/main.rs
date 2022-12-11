@@ -58,6 +58,23 @@ impl DirectoryMetadata {
         None
     }
 
+    pub fn find_subdirectories<F: Fn(&DirectoryMetadata) -> bool>(
+        &self,
+        f: F,
+    ) -> Vec<&DirectoryMetadata> {
+        self.items
+            .iter()
+            .filter(|item| match item {
+                Node::Directory(d) => f(d),
+                _ => false,
+            })
+            .filter_map(|item| match item {
+                Node::Directory(d) => Some(d),
+                _ => None,
+            })
+            .collect::<_>()
+    }
+
     pub fn size(&self) -> usize {
         self.items
             .iter()
@@ -219,6 +236,10 @@ mod test {
         assert_eq!(root_dir.size(), 48381165);
         assert_eq!(root_dir.find_subdirectory("a").unwrap().size(), 94853);
         assert_eq!(root_dir.find_subdirectory("d").unwrap().size(), 24933642);
+        let small_dirs = root_dir.find_subdirectories(|dir| dir.size() < 100000);
+        dbg!(&small_dirs);
+        assert_eq!(small_dirs.len(), 1);
+        assert_eq!(small_dirs.get(0).unwrap().name(), "a");
     }
 
     #[test]
