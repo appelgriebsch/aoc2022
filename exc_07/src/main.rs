@@ -196,7 +196,7 @@ fn main() {
             .collect();
         let mut parser = Parser::new(lines);
         root_dir.parse(&mut parser);
-        dbg!(&root_dir);
+
         let dirs = root_dir.directories();
         let no_of_dirs = dirs.len();
         let dir_size: usize = dirs
@@ -204,7 +204,28 @@ fn main() {
             .filter(|dir| dir.size() < 100000)
             .map(|dir| dir.size())
             .sum();
-        println!("Sum of {no_of_dirs} directories with at most 100000 bytes: {dir_size}");
+        println!(
+            "Scanned {no_of_dirs} directories, and found with at most 100000 bytes: {dir_size}"
+        );
+
+        let free_space = 70000000 - root_dir.size();
+        let required_space = 30000000 - free_space;
+        println!("{free_space} left on device, but need {required_space} more to update.");
+
+        let mut dirs = root_dir.directories();
+        dirs.sort_by_key(|a| a.size());
+        let remove_dir = dirs
+            .into_iter()
+            .filter(|dir| dir.size() >= required_space)
+            .take(1)
+            .next()
+            .expect("No matching directory found to clear up enough space on device");
+
+        print!(
+            "Found directory {} with size {} to ease required amount of space",
+            remove_dir.name(),
+            remove_dir.size()
+        );
     }
 }
 
@@ -264,5 +285,54 @@ mod test {
     }
 
     #[test]
-    fn processes_sample_part2() {}
+    fn processes_sample_part2() {
+        let input = r#"$ cd /
+                       $ ls
+                       dir a
+                       14848514 b.txt
+                       8504156 c.dat
+                       dir d
+                       $ cd a
+                       $ ls
+                       dir e
+                       29116 f
+                       2557 g
+                       62596 h.lst
+                       $ cd e
+                       $ ls
+                       584 i
+                       $ cd ..
+                       $ cd ..
+                       $ cd d
+                       $ ls
+                       4060174 j
+                       8033020 d.log
+                       5626152 d.ext
+                       7214296 k"#;
+
+        let mut root_dir = DirectoryMetadata::new("/");
+        let lines: Vec<_> = input
+            .split('\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| line.trim())
+            .skip(1)
+            .collect();
+        let mut parser = Parser::new(lines);
+        root_dir.parse(&mut parser);
+
+        let free_space = 70000000 - root_dir.size();
+        let required_space = 30000000 - free_space;
+
+        let mut dirs = root_dir.directories();
+        assert_eq!(dirs.len(), 3);
+        dirs.sort_by_key(|a| a.size());
+        let remove_dirs: Vec<_> = dirs
+            .into_iter()
+            .filter(|dir| dir.size() >= required_space)
+            .take(1)
+            .collect();
+        assert_eq!(remove_dirs.len(), 1);
+        assert_eq!(remove_dirs.get(0).unwrap().name(), "d");
+        assert_eq!(remove_dirs.get(0).unwrap().size(), 24933642);
+    }
 }
