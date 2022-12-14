@@ -47,6 +47,20 @@ impl DirectoryMetadata {
         self.items.as_ref()
     }
 
+    pub fn directories(&self) -> Vec<&DirectoryMetadata> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                Node::Directory(d) => {
+                    let result = [vec![d], d.directories()].concat();
+                    Some(result)
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+
     pub fn find_subdirectory(&self, name: &str) -> Option<&DirectoryMetadata> {
         if let Some(Node::Directory(directory)) = self.items.iter().find(|item| match item {
             Node::Directory(d) => d.name() == name,
@@ -56,23 +70,6 @@ impl DirectoryMetadata {
         }
 
         None
-    }
-
-    pub fn find_subdirectories<F: Fn(&DirectoryMetadata) -> bool>(
-        &self,
-        f: F,
-    ) -> Vec<&DirectoryMetadata> {
-        self.items
-            .iter()
-            .filter(|item| match item {
-                Node::Directory(d) => f(d),
-                _ => false,
-            })
-            .filter_map(|item| match item {
-                Node::Directory(d) => Some(d),
-                _ => None,
-            })
-            .collect::<_>()
     }
 
     pub fn size(&self) -> usize {
@@ -189,6 +186,25 @@ fn main() {
         input_file
             .read_to_string(&mut input)
             .expect("Error reading input file {input_filename}.");
+
+        let mut root_dir = DirectoryMetadata::new("/");
+        let lines: Vec<_> = input
+            .split('\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| line.trim())
+            .skip(1)
+            .collect();
+        let mut parser = Parser::new(lines);
+        root_dir.parse(&mut parser);
+        dbg!(&root_dir);
+        let dirs = root_dir.directories();
+        let no_of_dirs = dirs.len();
+        let dir_size: usize = dirs
+            .into_iter()
+            .filter(|dir| dir.size() < 100000)
+            .map(|dir| dir.size())
+            .sum();
+        println!("Sum of {no_of_dirs} directories with at most 100000 bytes: {dir_size}");
     }
 }
 
@@ -236,10 +252,15 @@ mod test {
         assert_eq!(root_dir.size(), 48381165);
         assert_eq!(root_dir.find_subdirectory("a").unwrap().size(), 94853);
         assert_eq!(root_dir.find_subdirectory("d").unwrap().size(), 24933642);
-        let small_dirs = root_dir.find_subdirectories(|dir| dir.size() < 100000);
-        dbg!(&small_dirs);
-        assert_eq!(small_dirs.len(), 1);
-        assert_eq!(small_dirs.get(0).unwrap().name(), "a");
+
+        let dirs = root_dir.directories();
+        assert_eq!(dirs.len(), 3);
+        let dir_size: usize = dirs
+            .into_iter()
+            .filter(|dir| dir.size() < 100000)
+            .map(|dir| dir.size())
+            .sum();
+        assert_eq!(dir_size, 95437);
     }
 
     #[test]
