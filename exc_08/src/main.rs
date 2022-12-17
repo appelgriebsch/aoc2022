@@ -1,6 +1,28 @@
 use std::{env, fs::File, io::Read, path::Path};
 
+use grid::Grid;
+
 const RADIX: u32 = 10;
+
+fn is_visible_from_top(grid: &Grid<u32>, row: usize, col: usize) -> bool {
+    let cell = grid[row][col];
+    grid.iter_col(col).take(row).all(|c| *c < cell)
+}
+
+fn is_visible_from_bottom(grid: &Grid<u32>, row: usize, col: usize) -> bool {
+    let cell = grid[row][col];
+    grid.iter_col(col).skip(row + 1).all(|c| *c < cell)
+}
+
+fn is_visible_from_left(grid: &Grid<u32>, row: usize, col: usize) -> bool {
+    let cell = grid[row][col];
+    grid.iter_row(row).take(col).all(|c| *c < cell)
+}
+
+fn is_visible_from_right(grid: &Grid<u32>, row: usize, col: usize) -> bool {
+    let cell = grid[row][col];
+    grid.iter_row(row).skip(col + 1).all(|c| *c < cell)
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -20,6 +42,42 @@ fn main() {
         input_file
             .read_to_string(&mut input)
             .expect("Error reading input file {input_filename}.");
+
+        let lines: Vec<_> = input
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect();
+
+        let line_length = lines[0].chars().count();
+        let mut grid: Grid<u32> = Grid::new(0, line_length);
+        lines.iter().for_each(|line| {
+            grid.push_row(line.chars().map(|c| c.to_digit(RADIX).unwrap()).collect());
+        });
+
+        let outer = grid.iter_col(0).count()
+            + grid.iter_col(grid.cols() - 1).count()
+            + grid.iter_row(0).skip(1).take(grid.cols() - 2).count()
+            + grid
+                .iter_row(grid.rows() - 1)
+                .skip(1)
+                .take(grid.cols() - 2)
+                .count();
+
+        let mut inner = 0;
+        for row in 1..(grid.rows() - 1) {
+            for col in 1..(grid.cols() - 1) {
+                if is_visible_from_top(&grid, row, col)
+                    || is_visible_from_left(&grid, row, col)
+                    || is_visible_from_right(&grid, row, col)
+                    || is_visible_from_bottom(&grid, row, col)
+                {
+                    inner += 1;
+                }
+            }
+        }
+
+        println!("There are {outer} outer and {inner} inner trees visible");
     }
 }
 
@@ -27,7 +85,10 @@ fn main() {
 mod test {
     use grid::Grid;
 
-    use crate::RADIX;
+    use crate::{
+        is_visible_from_bottom, is_visible_from_left, is_visible_from_right, is_visible_from_top,
+        RADIX,
+    };
 
     #[test]
     fn processes_sample_part1() {
@@ -36,15 +97,42 @@ mod test {
                        65332
                        33549
                        35390"#;
-        let lines: Vec<_> = input.split('\n').map(|line| line.trim()).collect();
+        let lines: Vec<_> = input
+            .split('\n')
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect();
         let line_length = lines[0].chars().count();
         let mut grid: Grid<u32> = Grid::new(0, line_length);
-        lines.iter()
-             .for_each(|line| {
-                grid.push_row(line.chars().map(|c| c.to_digit(RADIX).unwrap()).collect());
-            });
+        lines.iter().for_each(|line| {
+            grid.push_row(line.chars().map(|c| c.to_digit(RADIX).unwrap()).collect());
+        });
         dbg!(&grid);
         assert_eq!(grid.get(0, 0), Some(&3));
         assert_eq!(grid.get(grid.rows() - 1, grid.cols() - 1), Some(&0));
+        let outer = grid.iter_col(0).count()
+            + grid.iter_col(grid.cols() - 1).count()
+            + grid.iter_row(0).skip(1).take(grid.cols() - 2).count()
+            + grid
+                .iter_row(grid.rows() - 1)
+                .skip(1)
+                .take(grid.cols() - 2)
+                .count();
+        assert_eq!(outer, 16);
+
+        let mut inner = 0;
+        for row in 1..(grid.rows() - 1) {
+            for col in 1..(grid.cols() - 1) {
+                if is_visible_from_top(&grid, row, col)
+                    || is_visible_from_left(&grid, row, col)
+                    || is_visible_from_right(&grid, row, col)
+                    || is_visible_from_bottom(&grid, row, col)
+                {
+                    inner += 1;
+                }
+            }
+        }
+
+        assert_eq!(inner, 5);
     }
 }
